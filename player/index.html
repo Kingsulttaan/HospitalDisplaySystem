@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <title>Hospital Screen</title>
+
+  <style>
+
+    body {
+
+      margin: 0;
+
+      background: black;
+
+      overflow: hidden;
+    }
+
+    img, video {
+
+      width: 100vw;
+
+      height: 100vh;
+
+      object-fit: cover;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+<div id="content"></div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+
+const socket = io("http://localhost:5000");
+
+socket.emit("register-device", "hospital-a");
+
+socket.on("new-media", (data) => {
+
+  const container =
+    document.getElementById("content");
+
+  if (
+
+    data.mediaUrl.endsWith(".mp4")
+
+  ) {
+
+    container.innerHTML = `
+
+      <video autoplay loop controls>
+
+        <source src="${data.mediaUrl}">
+
+      </video>
+
+    `;
+
+  } else {
+
+    container.innerHTML = `
+
+      <img src="${data.mediaUrl}" />
+
+    `;
+  }
+
+});
+
+</script>
+
+</body>
+
+</html>
