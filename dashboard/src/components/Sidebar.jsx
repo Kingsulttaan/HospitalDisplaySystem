@@ -2,7 +2,8 @@ import {
   FaHospital,
   FaWifi,
   FaUpload,
-  FaChartBar
+  FaChartBar,
+  FaList
 } from "react-icons/fa";
 
 import { Link } from "react-router-dom";
@@ -14,7 +15,9 @@ function Sidebar() {
     <div className="w-64 bg-blue-900 text-white min-h-screen p-6">
 
       <h1 className="text-3xl font-bold mb-10">
+
         Hospital CMS
+
       </h1>
 
       <div className="space-y-5">
@@ -51,11 +54,20 @@ function Sidebar() {
           Upload Media
         </Link>
 
+        <Link
+          to="/playlist"
+          className="flex items-center gap-3 hover:text-yellow-300"
+        >
+          <FaList />
+          Playlist
+        </Link>
+
       </div>
 
     </div>
 
   );
+
 }
 
 export default Sidebar;

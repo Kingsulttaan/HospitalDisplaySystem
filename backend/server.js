@@ -1,14 +1,22 @@
+require("dotenv").config();
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const multer = require("multer");
 const path = require("path");
+const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
+const Hospital =
+  require("./models/Hospital");
+
 const app = express();
-const server = http.createServer(app);
+
+const server =
+  http.createServer(app);
 
 const io = new Server(server, {
   cors: {
@@ -16,15 +24,42 @@ const io = new Server(server, {
   }
 });
 
-const SECRET_KEY = "hospital_secret_key";
+const SECRET_KEY =
+  "hospital_secret_key";
 
 app.use(cors());
+
 app.use(express.json());
 
 app.use(
   "/uploads",
   express.static("uploads")
 );
+
+/* =========================
+   MONGODB
+========================= */
+
+mongoose
+  .connect(
+    process.env.MONGO_URI
+  )
+  .then(() => {
+
+    console.log(
+      "MongoDB Connected"
+    );
+
+  })
+  .catch(err => {
+
+    console.log(err);
+
+  });
+
+/* =========================
+   ROOT
+========================= */
 
 app.get("/", (req, res) => {
 
@@ -34,131 +69,150 @@ app.get("/", (req, res) => {
 
 });
 
-/* USERS */
+/* =========================
+   USERS
+========================= */
 
 const users = [
+
   {
+
     username: "admin",
-    password: bcrypt.hashSync(
-      "12345",
-      10
-    )
+
+    password:
+      bcrypt.hashSync(
+        "12345",
+        10
+      )
+
   }
+
 ];
 
-/* DATA */
+/* =========================
+   LOGIN
+========================= */
 
-let hospitals = [];
+app.post(
+  "/login",
+  (req, res) => {
 
-let connectedDevices = {};
+    const {
+      username,
+      password
+    } = req.body;
 
-/* LOGIN */
+    const user =
+      users.find(
+        u =>
+          u.username ===
+          username
+      );
 
-app.post("/login", (req, res) => {
+    if (!user) {
 
-  const {
-    username,
-    password
-  } = req.body;
+      return res.status(401)
+        .json({
 
-  const user =
-    users.find(
-      u =>
-        u.username === username
-    );
+          message:
+            "Invalid username"
 
-  if (!user) {
+        });
 
-    return res.status(401).json({
-      message:
-        "Invalid username"
-    });
-
-  }
-
-  const valid =
-    bcrypt.compareSync(
-      password,
-      user.password
-    );
-
-  if (!valid) {
-
-    return res.status(401).json({
-      message:
-        "Invalid password"
-    });
-
-  }
-
-  const token = jwt.sign(
-    { username },
-    SECRET_KEY,
-    {
-      expiresIn: "1d"
     }
-  );
 
-  res.json({
-    token
-  });
+    const valid =
+      bcrypt.compareSync(
+        password,
+        user.password
+      );
 
-});
+    if (!valid) {
 
-/* HOSPITALS */
+      return res.status(401)
+        .json({
+
+          message:
+            "Invalid password"
+
+        });
+
+    }
+
+    const token =
+      jwt.sign(
+        { username },
+        SECRET_KEY,
+        {
+          expiresIn: "1d"
+        }
+      );
+
+    res.json({
+      token
+    });
+
+  }
+);
+
+/* =========================
+   HOSPITAL CRUD
+========================= */
 
 app.get(
   "/hospitals",
-  (req, res) => {
+  async (req, res) => {
 
-    res.json(hospitals);
+    const hospitals =
+      await Hospital.find();
+
+    res.json(
+      hospitals
+    );
 
   }
 );
 
 app.post(
   "/hospital",
-  (req, res) => {
+  async (req, res) => {
 
     const {
       name,
       deviceId
     } = req.body;
 
-    const duplicate =
-      hospitals.find(
-        h =>
-          h.deviceId ===
-          deviceId
-      );
+    const existing =
+      await Hospital.findOne({
 
-    if (duplicate) {
+        deviceId
 
-      return res.status(400).json({
-        message:
-          "Device ID already exists"
       });
+
+    if (existing) {
+
+      return res.status(400)
+        .json({
+
+          message:
+            "Device ID already exists"
+
+        });
 
     }
 
-    hospitals.push({
-
-      id: Date.now(),
+    await Hospital.create({
 
       name,
 
-      deviceId,
-
-      status: "Offline",
-
-      currentContent: "-",
-
-      lastSeen: null
+      deviceId
 
     });
 
     res.json({
+
       success: true
+
     });
 
   }
@@ -166,58 +220,18 @@ app.post(
 
 app.put(
   "/hospital/:id",
-  (req, res) => {
+  async (req, res) => {
 
-    const id =
-      Number(
-        req.params.id
+    await Hospital
+      .findByIdAndUpdate(
+        req.params.id,
+        req.body
       );
-
-    const {
-      name,
-      deviceId
-    } = req.body;
-
-    const hospital =
-      hospitals.find(
-        h =>
-          h.id === id
-      );
-
-    if (!hospital) {
-
-      return res.status(404).json({
-        message:
-          "Hospital not found"
-      });
-
-    }
-
-    const duplicate =
-      hospitals.find(
-        h =>
-          h.deviceId ===
-            deviceId &&
-          h.id !== id
-      );
-
-    if (duplicate) {
-
-      return res.status(400).json({
-        message:
-          "Device ID already exists"
-      });
-
-    }
-
-    hospital.name =
-      name;
-
-    hospital.deviceId =
-      deviceId;
 
     res.json({
+
       success: true
+
     });
 
   }
@@ -225,165 +239,294 @@ app.put(
 
 app.delete(
   "/hospital/:id",
-  (req, res) => {
+  async (req, res) => {
 
-    const id =
-      Number(
+    await Hospital
+      .findByIdAndDelete(
         req.params.id
       );
 
-    hospitals =
-      hospitals.filter(
-        h =>
-          h.id !== id
-      );
-
     res.json({
+
       success: true
+
     });
 
   }
 );
 
-/* SOCKETS */
+/* =========================
+   PLAYLIST
+========================= */
 
-io.on(
-  "connection",
-  (socket) => {
+app.get(
+  "/playlist/:deviceId",
+  async (req, res) => {
 
-    console.log(
-      "Device Connected"
-    );
+    const hospital =
+      await Hospital.findOne({
 
-    socket.on(
-      "register-device",
-      (deviceId) => {
+        deviceId:
+          req.params.deviceId
 
-        connectedDevices[
-          deviceId
-        ] = socket.id;
+      });
 
-      }
-    );
+    if (!hospital) {
 
-    socket.on(
-      "heartbeat",
-      (deviceId) => {
+      return res.status(404)
+        .json({
 
-        const hospital =
-          hospitals.find(
-            h =>
-              h.deviceId ===
-              deviceId
-          );
+          message:
+            "Hospital not found"
 
-        if (hospital) {
+        });
 
-          hospital.status =
-            "Online";
+    }
 
-          hospital.lastSeen =
-            Date.now();
-
-        }
-
-      }
-    );
-
-    socket.on(
-      "disconnect",
-      () => {
-
-        Object.keys(
-          connectedDevices
-        ).forEach(
-          key => {
-
-            if (
-              connectedDevices[
-                key
-              ] === socket.id
-            ) {
-
-              delete connectedDevices[
-                key
-              ];
-
-            }
-
-          }
-        );
-
-      }
+    res.json(
+      hospital.playlist
     );
 
   }
 );
 
-/* OFFLINE CHECK */
+app.delete(
+  "/playlist/:deviceId/:itemId",
+  async (req, res) => {
 
-setInterval(() => {
+    const hospital =
+      await Hospital.findOne({
 
-  hospitals.forEach(
-    hospital => {
+        deviceId:
+          req.params.deviceId
 
-      if (
-        !hospital.lastSeen
-      ) return;
+      });
 
-      const diff =
-        Date.now() -
-        hospital.lastSeen;
+    if (!hospital) {
 
-      if (
-        diff > 10000
-      ) {
+      return res.status(404)
+        .json({
 
-        hospital.status =
-          "Offline";
+          message:
+            "Hospital not found"
 
-      }
+        });
 
     }
-  );
 
-}, 5000);
+    hospital.playlist =
+      hospital.playlist.filter(
 
-/* UPLOAD */
+        item =>
+
+          item._id.toString()
+          !==
+          req.params.itemId
+
+      );
+
+    await hospital.save();
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+/* =========================
+   MOVE UP
+========================= */
+
+app.put(
+  "/playlist/:deviceId/:itemId/up",
+  async (req, res) => {
+
+    const hospital =
+      await Hospital.findOne({
+
+        deviceId:
+          req.params.deviceId
+
+      });
+
+    if (!hospital) {
+
+      return res.status(404)
+        .json({
+
+          message:
+            "Hospital not found"
+
+        });
+
+    }
+
+    const index =
+      hospital.playlist.findIndex(
+
+        item =>
+
+          item._id.toString()
+          ===
+          req.params.itemId
+
+      );
+
+    if (index <= 0) {
+
+      return res.json({
+
+        success: true
+
+      });
+
+    }
+
+    const temp =
+      hospital.playlist[index];
+
+    hospital.playlist[index] =
+      hospital.playlist[index - 1];
+
+    hospital.playlist[index - 1] =
+      temp;
+
+    hospital.markModified(
+      "playlist"
+    );
+
+    await hospital.save();
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+/* =========================
+   MOVE DOWN
+========================= */
+
+app.put(
+  "/playlist/:deviceId/:itemId/down",
+  async (req, res) => {
+
+    const hospital =
+      await Hospital.findOne({
+
+        deviceId:
+          req.params.deviceId
+
+      });
+
+    if (!hospital) {
+
+      return res.status(404)
+        .json({
+
+          message:
+            "Hospital not found"
+
+        });
+
+    }
+
+    const index =
+      hospital.playlist.findIndex(
+
+        item =>
+
+          item._id.toString()
+          ===
+          req.params.itemId
+
+      );
+
+    if (
+
+      index === -1 ||
+
+      index ===
+      hospital.playlist.length - 1
+
+    ) {
+
+      return res.json({
+
+        success: true
+
+      });
+
+    }
+
+    const temp =
+      hospital.playlist[index];
+
+    hospital.playlist[index] =
+      hospital.playlist[index + 1];
+
+    hospital.playlist[index + 1] =
+      temp;
+
+    hospital.markModified(
+      "playlist"
+    );
+
+    await hospital.save();
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+/* =========================
+   STORAGE
+========================= */
 
 const storage =
   multer.diskStorage({
 
-    destination:
-      function (
-        req,
-        file,
-        cb
-      ) {
+    destination(
+      req,
+      file,
+      cb
+    ) {
 
-        cb(
-          null,
-          "uploads/"
-        );
+      cb(
+        null,
+        "uploads/"
+      );
 
-      },
+    },
 
-    filename:
-      function (
-        req,
-        file,
-        cb
-      ) {
+    filename(
+      req,
+      file,
+      cb
+    ) {
 
-        cb(
-          null,
-          Date.now() +
-          path.extname(
-            file.originalname
-          )
-        );
+      cb(
 
-      }
+        null,
+
+        Date.now() +
+        path.extname(
+          file.originalname
+        )
+
+      );
+
+    }
 
   });
 
@@ -392,12 +535,16 @@ const upload =
     storage
   });
 
+/* =========================
+   UPLOAD
+========================= */
+
 app.post(
   "/upload",
   upload.single(
     "media"
   ),
-  (req, res) => {
+  async (req, res) => {
 
     const {
       deviceId
@@ -406,48 +553,54 @@ app.post(
     const mediaUrl =
       `http://localhost:5000/uploads/${req.file.filename}`;
 
-    const socketId =
-      connectedDevices[
-        deviceId
-      ];
-
-    if (socketId) {
-
-      io.to(
-        socketId
-      ).emit(
-        "new-media",
-        {
-          mediaUrl
-        }
-      );
-
-    }
-
     const hospital =
-      hospitals.find(
-        h =>
-          h.deviceId ===
-          deviceId
-      );
+      await Hospital.findOne({
 
-    if (hospital) {
+        deviceId
 
-      hospital.currentContent =
-        req.file.filename;
+      });
+
+    if (!hospital) {
+
+      return res.status(404)
+        .json({
+
+          message:
+            "Hospital not found"
+
+        });
 
     }
+
+    hospital.playlist.push({
+
+      mediaUrl,
+
+      filename:
+        req.file.filename
+
+    });
+
+    hospital.currentContent =
+      req.file.filename;
+
+    await hospital.save();
 
     res.json({
 
       success: true,
 
-      mediaUrl
+      playlist:
+        hospital.playlist
 
     });
 
   }
 );
+
+/* =========================
+   START SERVER
+========================= */
 
 server.listen(
   5000,

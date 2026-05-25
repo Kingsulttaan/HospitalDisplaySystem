@@ -10,6 +10,7 @@ import Hospitals from "./pages/Hospitals";
 import Monitoring from "./pages/Monitoring";
 import UploadMedia from "./pages/UploadMedia";
 import Player from "./pages/Player";
+import Playlist from "./pages/Playlist";
 
 function App() {
 
@@ -42,6 +43,11 @@ function App() {
         <Route
           path="/upload"
           element={<UploadMedia />}
+        />
+
+        <Route
+          path="/playlist"
+          element={<Playlist />}
         />
 
         <Route
