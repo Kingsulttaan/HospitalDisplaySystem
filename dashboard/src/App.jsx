@@ -11,6 +11,9 @@ import Monitoring from "./pages/Monitoring";
 import UploadMedia from "./pages/UploadMedia";
 import Player from "./pages/Player";
 import Playlist from "./pages/Playlist";
+import Schedules from "./pages/Schedules";
+import Emergency from "./pages/Emergency";
+import Users from "./pages/Users";
 
 function App() {
 
@@ -48,6 +51,21 @@ function App() {
         <Route
           path="/playlist"
           element={<Playlist />}
+        />
+
+        <Route
+          path="/schedules"
+          element={<Schedules />}
+        />
+
+        <Route
+          path="/emergency"
+          element={<Emergency />}
+        />
+
+        <Route
+          path="/users"
+          element={<Users />}
         />
 
         <Route

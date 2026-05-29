@@ -20,6 +20,12 @@ function Player() {
   const [currentMedia, setCurrentMedia] =
     useState(null);
 
+  const [scheduleMedia, setScheduleMedia] =
+    useState(null);
+
+  const [emergency, setEmergency] =
+    useState(null);
+
   const loadPlaylist =
     async () => {
 
@@ -34,15 +40,91 @@ function Player() {
           response.data
         );
 
-        if (
-          response.data.length > 0
-        ) {
+      } catch (error) {
 
-          setCurrentMedia(
-            response.data[0]
+        console.log(error);
+
+      }
+
+    };
+
+  const checkSchedules =
+    async () => {
+
+      try {
+
+        const response =
+          await axios.get(
+            `http://localhost:5000/schedule/${deviceId}`
           );
 
-          setCurrentIndex(0);
+        const schedules =
+          response.data;
+
+        const now =
+          new Date();
+
+        const currentTime =
+          now
+            .toTimeString()
+            .slice(0, 5);
+
+        const active =
+          schedules.find(
+            item =>
+
+              currentTime >=
+              item.startTime &&
+
+              currentTime <=
+              item.endTime
+          );
+
+        if (active) {
+
+          setScheduleMedia(
+            active
+          );
+
+        } else {
+
+          setScheduleMedia(
+            null
+          );
+
+        }
+
+      } catch (error) {
+
+        console.log(error);
+
+      }
+
+    };
+
+  const loadEmergency =
+    async () => {
+
+      try {
+
+        const response =
+          await axios.get(
+            "http://localhost:5000/emergency"
+          );
+
+        if (
+          response.data.active
+        ) {
+
+          setEmergency(
+            response.data
+          );
+
+        } else {
+
+          setEmergency(
+            null
+          );
 
         }
 
@@ -61,6 +143,10 @@ function Player() {
 
     loadPlaylist();
 
+    checkSchedules();
+
+    loadEmergency();
+
     socket.emit(
       "register-device",
       deviceId
@@ -76,11 +162,31 @@ function Player() {
 
       }, 3000);
 
+    const refreshTimer =
+      setInterval(() => {
+
+        checkSchedules();
+
+        loadEmergency();
+
+      }, 5000);
+
     socket.on(
-      "new-media",
+      "playlist-updated",
       async () => {
 
         await loadPlaylist();
+
+        await checkSchedules();
+
+      }
+    );
+
+    socket.on(
+      "emergency-updated",
+      async () => {
+
+        await loadEmergency();
 
       }
     );
@@ -91,6 +197,18 @@ function Player() {
         heartbeat
       );
 
+      clearInterval(
+        refreshTimer
+      );
+
+      socket.off(
+        "playlist-updated"
+      );
+
+      socket.off(
+        "emergency-updated"
+      );
+
     };
 
   }, [deviceId]);
@@ -98,8 +216,36 @@ function Player() {
   useEffect(() => {
 
     if (
+      emergency
+    ) {
+
+      setCurrentMedia({
+
+        mediaUrl:
+          emergency.mediaUrl
+
+      });
+
+      return;
+
+    }
+
+    if (
+      scheduleMedia
+    ) {
+
+      setCurrentMedia(
+        scheduleMedia
+      );
+
+      return;
+
+    }
+
+    if (
       playlist.length === 0
-    ) return;
+    )
+      return;
 
     const media =
       playlist[
@@ -110,15 +256,13 @@ function Player() {
       media
     );
 
-    if (
+    const isVideo =
       media.mediaUrl
         .toLowerCase()
-        .endsWith(".mp4")
-    ) {
+        .endsWith(".mp4");
 
+    if (isVideo)
       return;
-
-    }
 
     const timer =
       setTimeout(() => {
@@ -136,11 +280,23 @@ function Player() {
 
   }, [
     currentIndex,
-    playlist
+    playlist,
+    scheduleMedia,
+    emergency
   ]);
 
   const nextMedia =
     () => {
+
+      if (
+        emergency
+      )
+        return;
+
+      if (
+        scheduleMedia
+      )
+        return;
 
       setCurrentIndex(
         previous =>
@@ -156,21 +312,13 @@ function Player() {
 
     return (
 
-      <div className="h-screen bg-black flex flex-col items-center justify-center">
+      <div className="h-screen bg-black flex items-center justify-center">
 
-        <h1 className="text-white text-4xl mb-4">
+        <h1 className="text-white text-4xl">
 
           Waiting for content...
 
         </h1>
-
-        <p className="text-green-400">
-
-          Device:
-          {" "}
-          {deviceId}
-
-        </p>
 
       </div>
 
@@ -185,54 +333,88 @@ function Player() {
 
   return (
 
-    <div className="h-screen bg-black">
+  <div className="h-screen bg-black relative">
 
-      {
+    {
 
-        !isVideo && (
+      !isVideo && (
 
-          <img
-            src={
-              currentMedia.mediaUrl
-            }
-            alt=""
-            className="
-            w-full
-            h-full
-            object-contain
-            "
-          />
+        <img
+          src={
+            currentMedia.mediaUrl
+          }
+          alt=""
+          className="
+          w-full
+          h-full
+          object-contain
+          "
+        />
 
-        )
+      )
 
-      }
+    }
 
-      {
+    {
 
-        isVideo && (
+      isVideo && (
 
-          <video
-            src={
-              currentMedia.mediaUrl
-            }
-            autoPlay
-            muted
-            onEnded={
-              nextMedia
-            }
-            className="
-            w-full
-            h-full
-            "
-          />
+        <video
+          src={
+            currentMedia.mediaUrl
+          }
+          autoPlay
+          muted
+          loop={
+            emergency ||
+            scheduleMedia
+              ? true
+              : false
+          }
+          onEnded={
+            nextMedia
+          }
+          className="
+          w-full
+          h-full
+          "
+        />
 
-        )
+      )
 
-      }
+    }
 
-    </div>
+    {
 
-  );
+      emergency && (
+
+        <div
+          className="
+          absolute
+          top-0
+          left-0
+          w-full
+          bg-red-700
+          text-white
+          text-center
+          text-5xl
+          font-bold
+          py-6
+          z-50
+          "
+        >
+
+          🚨 {emergency.message}
+
+        </div>
+
+      )
+
+    }
+
+  </div>
+
+);
 
 }
 

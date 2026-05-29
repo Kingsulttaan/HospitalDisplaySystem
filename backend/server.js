@@ -13,6 +13,11 @@ const bcrypt = require("bcryptjs");
 const Hospital =
   require("./models/Hospital");
 
+  const Emergency =
+  require("./models/Emergency");
+  const User =
+  require("./models/User");
+
 const app = express();
 
 const server =
@@ -23,6 +28,7 @@ const io = new Server(server, {
     origin: "*"
   }
 });
+let connectedDevices = {};
 
 const SECRET_KEY =
   "hospital_secret_key";
@@ -73,21 +79,7 @@ app.get("/", (req, res) => {
    USERS
 ========================= */
 
-const users = [
 
-  {
-
-    username: "admin",
-
-    password:
-      bcrypt.hashSync(
-        "12345",
-        10
-      )
-
-  }
-
-];
 
 /* =========================
    LOGIN
@@ -95,19 +87,22 @@ const users = [
 
 app.post(
   "/login",
-  (req, res) => {
+  async (req, res) => {
 
     const {
+
       username,
+
       password
+
     } = req.body;
 
     const user =
-      users.find(
-        u =>
-          u.username ===
-          username
-      );
+      await User.findOne({
+
+        username
+
+      });
 
     if (!user) {
 
@@ -123,8 +118,11 @@ app.post(
 
     const valid =
       bcrypt.compareSync(
+
         password,
+
         user.password
+
       );
 
     if (!valid) {
@@ -141,15 +139,185 @@ app.post(
 
     const token =
       jwt.sign(
-        { username },
-        SECRET_KEY,
+
         {
-          expiresIn: "1d"
+
+          username:
+            user.username,
+
+          role:
+            user.role
+
+        },
+
+        SECRET_KEY,
+
+        {
+
+          expiresIn:
+            "1d"
+
         }
+
       );
 
     res.json({
-      token
+
+      token,
+
+      username:
+        user.username,
+
+      role:
+        user.role,
+
+      avatar:
+        user.avatar
+
+    });
+
+  }
+);
+/* =========================
+   USER MANAGEMENT
+========================= */
+
+app.get(
+  "/users",
+  async (req, res) => {
+
+    const users =
+      await User.find()
+      .select("-password");
+
+    res.json(users);
+
+  }
+);
+
+app.post(
+  "/users",
+  async (req, res) => {
+
+    try {
+
+      const {
+
+        username,
+
+        password,
+
+        role
+
+      } = req.body;
+
+      const existing =
+        await User.findOne({
+
+          username
+
+        });
+
+      if (existing) {
+
+        return res.status(400)
+          .json({
+
+            message:
+              "User already exists"
+
+          });
+
+      }
+
+      const hashed =
+        bcrypt.hashSync(
+          password,
+          10
+        );
+
+      await User.create({
+
+        username,
+
+        password:
+          hashed,
+
+        role
+
+      });
+
+      res.json({
+
+        success: true
+
+      });
+
+    } catch (error) {
+
+      res.status(500)
+        .json({
+
+          message:
+            error.message
+
+        });
+
+    }
+
+  }
+);
+
+app.delete(
+  "/users/:id",
+  async (req, res) => {
+
+    await User.findByIdAndDelete(
+      req.params.id
+    );
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+app.put(
+  "/users/password/:id",
+  async (req, res) => {
+
+    const {
+
+      password
+
+    } = req.body;
+
+    const hashed =
+      bcrypt.hashSync(
+        password,
+        10
+      );
+
+    await User.findByIdAndUpdate(
+
+      req.params.id,
+
+      {
+
+        password:
+          hashed
+
+      }
+
+    );
+
+    res.json({
+
+      success: true
+
     });
 
   }
@@ -488,6 +656,224 @@ app.put(
 
   }
 );
+/* =========================
+   SCHEDULES
+========================= */
+
+app.get(
+  "/schedule/:deviceId",
+  async (req, res) => {
+
+    const hospital =
+      await Hospital.findOne({
+
+        deviceId:
+          req.params.deviceId
+
+      });
+
+    if (!hospital) {
+
+      return res.status(404)
+        .json({
+
+          message:
+            "Hospital not found"
+
+        });
+
+    }
+
+    res.json(
+      hospital.schedules || []
+    );
+
+  }
+);
+
+app.post(
+  "/schedule",
+  async (req, res) => {
+
+    const {
+
+      deviceId,
+
+      filename,
+
+      mediaUrl,
+
+      startTime,
+
+      endTime
+
+    } = req.body;
+
+    const hospital =
+      await Hospital.findOne({
+
+        deviceId
+
+      });
+
+    if (!hospital) {
+
+      return res.status(404)
+        .json({
+
+          message:
+            "Hospital not found"
+
+        });
+
+    }
+
+    hospital.schedules.push({
+
+      filename,
+
+      mediaUrl,
+
+      startTime,
+
+      endTime
+
+    });
+
+    await hospital.save();
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+app.delete(
+  "/schedule/:deviceId/:scheduleId",
+  async (req, res) => {
+
+    const hospital =
+      await Hospital.findOne({
+
+        deviceId:
+          req.params.deviceId
+
+      });
+
+    if (!hospital) {
+
+      return res.status(404)
+        .json({
+
+          message:
+            "Hospital not found"
+
+        });
+
+    }
+
+    hospital.schedules =
+      hospital.schedules.filter(
+
+        schedule =>
+
+          schedule._id.toString()
+          !==
+          req.params.scheduleId
+
+      );
+
+    await hospital.save();
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+/* =========================
+   EMERGENCY
+========================= */
+
+app.get(
+  "/emergency",
+  async (req, res) => {
+
+    let emergency =
+      await Emergency.findOne();
+
+    if (!emergency) {
+
+      emergency =
+        await Emergency.create({
+          active: false
+        });
+
+    }
+
+    res.json(
+      emergency
+    );
+
+  }
+);
+
+app.post(
+  "/emergency",
+  async (req, res) => {
+
+    const {
+
+      active,
+
+      message,
+
+      mediaUrl
+
+    } = req.body;
+
+    let emergency =
+      await Emergency.findOne();
+
+    if (!emergency) {
+
+      emergency =
+        new Emergency();
+
+    }
+
+    emergency.active =
+      active;
+
+    emergency.message =
+      message;
+
+    emergency.mediaUrl =
+      mediaUrl;
+
+    emergency.activatedAt =
+      new Date();
+
+    await emergency.save();
+
+    io.emit(
+      "emergency-updated"
+    );
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
 
 /* =========================
    STORAGE
@@ -586,14 +972,29 @@ app.post(
 
     await hospital.save();
 
-    res.json({
+const socketId =
+  connectedDevices[
+    deviceId
+  ];
 
-      success: true,
+if (socketId) {
 
-      playlist:
-        hospital.playlist
+  io.to(
+    socketId
+  ).emit(
+    "playlist-updated"
+  );
 
-    });
+}
+
+res.json({
+
+  success: true,
+
+  playlist:
+    hospital.playlist
+
+});
 
   }
 );
@@ -601,7 +1002,88 @@ app.post(
 /* =========================
    START SERVER
 ========================= */
+io.on(
+  "connection",
+  socket => {
 
+    console.log(
+      "Device Connected"
+    );
+
+    socket.on(
+      "register-device",
+      deviceId => {
+
+        connectedDevices[
+          deviceId
+        ] = socket.id;
+
+      }
+    );
+
+    socket.on(
+  "heartbeat",
+  async deviceId => {
+
+    try {
+
+      if (
+        mongoose.connection.readyState !== 1
+      ) {
+        return;
+      }
+
+      await Hospital.findOneAndUpdate(
+        {
+          deviceId
+        },
+        {
+          status: "Online",
+          lastSeen: new Date()
+        }
+      );
+
+    } catch (error) {
+
+      console.log(
+        "Heartbeat Error:",
+        error.message
+      );
+
+    }
+
+  }
+);
+
+    socket.on(
+      "disconnect",
+      () => {
+
+        Object.keys(
+          connectedDevices
+        ).forEach(
+          key => {
+
+            if (
+              connectedDevices[
+                key
+              ] === socket.id
+            ) {
+
+              delete connectedDevices[
+                key
+              ];
+
+            }
+
+          }
+        );
+
+      }
+    );
+
+  }
+);
 server.listen(
   5000,
   () => {

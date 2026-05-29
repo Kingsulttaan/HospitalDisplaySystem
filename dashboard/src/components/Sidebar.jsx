@@ -3,7 +3,10 @@ import {
   FaWifi,
   FaUpload,
   FaChartBar,
-  FaList
+  FaList,
+  FaClock,
+  FaExclamationTriangle,
+  FaUsers
 } from "react-icons/fa";
 
 import { Link } from "react-router-dom";
@@ -60,6 +63,30 @@ function Sidebar() {
         >
           <FaList />
           Playlist
+        </Link>
+
+        <Link
+          to="/schedules"
+          className="flex items-center gap-3 hover:text-yellow-300"
+        >
+          <FaClock />
+          Schedules
+        </Link>
+
+        <Link
+          to="/emergency"
+          className="flex items-center gap-3 hover:text-yellow-300"
+        >
+          <FaExclamationTriangle />
+          Emergency
+        </Link>
+
+        <Link
+          to="/users"
+          className="flex items-center gap-3 hover:text-yellow-300"
+        >
+          <FaUsers />
+          Users
         </Link>
 
       </div>

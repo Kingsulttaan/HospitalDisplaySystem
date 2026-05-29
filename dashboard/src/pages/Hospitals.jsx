@@ -123,8 +123,8 @@ function Hospitals() {
       );
 
       setEditingId(
-        hospital.id
-      );
+  hospital._id
+);
 
       window.scrollTo({
         top: 0,
@@ -326,8 +326,8 @@ function Hospitals() {
 
                 <div
                   key={
-                    hospital.id
-                  }
+  hospital._id
+}
                   className="
                   bg-white
                   p-5
@@ -371,8 +371,8 @@ function Hospitals() {
                       <button
                         onClick={() =>
                           deleteHospital(
-                            hospital.id
-                          )
+  hospital._id
+)
                         }
                         className="
                         bg-red-600

@@ -18,6 +18,19 @@ const playlistSchema =
 
   });
 
+const scheduleSchema =
+  new mongoose.Schema({
+
+    filename: String,
+
+    mediaUrl: String,
+
+    startTime: String,
+
+    endTime: String
+
+  });
+
 const hospitalSchema =
   new mongoose.Schema({
 
@@ -60,6 +73,12 @@ const hospitalSchema =
     playlist: [
 
       playlistSchema
+
+    ],
+
+    schedules: [
+
+      scheduleSchema
 
     ]
 
